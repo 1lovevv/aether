@@ -24,16 +24,14 @@ jobs:
       uses: crazy-max/ghaction-import-gpg@v6
       with:
         gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-        passphrase: ${{ secrets.GPG_PASSPHRASE }}
+        # No passphrase required (key was generated without one)
 
     - name: Build and deploy to Maven Central
       env:
         SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
         SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
-        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
       run: |
-        mvn clean deploy -P release -DskipTests \
-          -Dgpg.passphrase=${{ secrets.GPG_PASSPHRASE }}
+        mvn clean deploy -P release -DskipTests
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
