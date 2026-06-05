@@ -14,14 +14,37 @@ Aether 是一个为现代 Java 应用设计的轻量级 Actor 模型框架，充
 
 ## Quick Start
 
-### Maven Dependency
+### Maven Dependency (via JitPack)
+
+**Step 1**: 添加 JitPack 仓库
+
+```xml
+<repositories>
+    <repository>
+        <id>jitpack.io</id>
+        <url>https://jitpack.io</url>
+    </repository>
+</repositories>
+```
+
+**Step 2**: 添加 Aether 依赖
 
 ```xml
 <dependency>
-    <groupId>com.aether</groupId>
-    <artifactId>aether-spring-boot-starter</artifactId>
-    <version>1.0.0</version>
+    <groupId>com.github.1lovevv</groupId>
+    <artifactId>aether</artifactId>
+    <version>master-SNAPSHOT</version>
 </dependency>
+```
+
+> **Note**: 正式发布到 Maven Central 后，将使用 `com.aether` groupId。当前通过 JitPack 提供预览版本。
+
+### 本地构建
+
+```bash
+git clone https://github.com/1lovevv/aether.git
+cd aether
+mvn clean install
 ```
 
 ### Define an Actor

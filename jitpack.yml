@@ -1,0 +1,10 @@
+# JitPack configuration for Aether
+# https://jitpack.io/docs/BUILDING/
+
+# Use Java 21
+jdk:
+  - openjdk21
+
+# Maven build command
+install:
+  - mvn clean install -DskipTests
