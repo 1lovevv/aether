@@ -1,0 +1,3 @@
+com\example\orderservice\OrderProcessor.class
+com\example\orderservice\CreateOrderMsg.class
+com\example\orderservice\OrderServiceApplication.class
