@@ -1,10 +1,16 @@
 # Aether（以太）
 
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.1lovevv/aether-spring-boot-starter.svg)](https://search.maven.org/search?q=g:io.github.1lovevv)
+[![JitPack](https://jitpack.io/v/1lovevv/aether.svg)](https://jitpack.io/#1lovevv/aether)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Java](https://img.shields.io/badge/Java-21%2B-orange)](https://openjdk.org/projects/jdk/21/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.x-brightgreen)](https://spring.io/projects/spring-boot)
+
 > 基于 Java 虚拟线程的轻量级 Actor 模型框架
 
 Aether 是一个为现代 Java 应用设计的轻量级 Actor 模型框架，充分利用 Java 21+ 虚拟线程（Virtual Threads）的高并发能力，提供直观的 Actor 编程模型、强大的监督树机制以及开箱即用的 Spring Boot 集成。
 
-## Features
+## ✨ 特性
 
 - **🚀 虚拟线程 Actor** — 每个 Actor 运行在独立虚拟线程上，轻松实现百万级并发
 - **🌲 监督树** — 分层监督策略（OneForOne / AllForOne / RestForOne），自动故障恢复
@@ -12,11 +18,19 @@ Aether 是一个为现代 Java 应用设计的轻量级 Actor 模型框架，充
 - **📊 Micrometer 监控** — Actor 级别和系统级别指标，无缝接入 Prometheus/Grafana
 - **🔌 SPI 解耦** — 核心零 Spring 依赖，通过 SPI 插件机制实现框架扩展
 
-## Quick Start
+## 📦 安装
 
-### Maven Dependency (via JitPack)
+### Maven Central（推荐）
 
-**Step 1**: 添加 JitPack 仓库
+```xml
+<dependency>
+    <groupId>io.github.1lovevv</groupId>
+    <artifactId>aether-spring-boot-starter</artifactId>
+    <version>1.0.0</version>
+</dependency>
+```
+
+### JitPack（最新开发版）
 
 ```xml
 <repositories>
@@ -25,11 +39,7 @@ Aether 是一个为现代 Java 应用设计的轻量级 Actor 模型框架，充
         <url>https://jitpack.io</url>
     </repository>
 </repositories>
-```
 
-**Step 2**: 添加 Aether 依赖
-
-```xml
 <dependency>
     <groupId>com.github.1lovevv</groupId>
     <artifactId>aether</artifactId>
@@ -37,59 +47,84 @@ Aether 是一个为现代 Java 应用设计的轻量级 Actor 模型框架，充
 </dependency>
 ```
 
-> **Note**: 正式发布到 Maven Central 后，将使用 `com.aether` groupId。当前通过 JitPack 提供预览版本。
+### Gradle
 
-### 本地构建
-
-```bash
-git clone https://github.com/1lovevv/aether.git
-cd aether
-mvn clean install
+```gradle
+dependencies {
+    implementation 'io.github.1lovevv:aether-spring-boot-starter:1.0.0'
+}
 ```
 
-### Define an Actor
+## 🚀 快速开始
+
+### 1. 定义 Actor
 
 ```java
 import com.aether.spring.annotation.ActorBean;
 import com.aether.spring.annotation.OnMessage;
-import com.aether.core.actor.ActorRef;
+import com.aether.spi.ActorRef;
 
-@ActorBean
-public class OrderActor {
+@ActorBean(name = "order-processor")
+public class OrderProcessor {
+
+    @Autowired
+    private OrderRepository orderRepository;
 
     @OnMessage
-    public void onCreateOrder(CreateOrderCommand command) {
-        // 处理订单创建逻辑
-        System.out.println("Creating order: " + command.orderId());
+    public void onCreateOrder(CreateOrderMsg msg) {
+        // 同步、阻塞代码，运行在虚拟线程上
+        Order order = orderRepository.save(msg.toOrder());
+        System.out.println("Order created: " + order.id());
     }
 
     @OnMessage
-    public String onQueryStatus(QueryStatusQuery query) {
-        return "PROCESSING";
+    public void onCancelOrder(CancelOrderMsg msg) {
+        orderRepository.cancel(msg.orderId());
     }
 }
 ```
 
-### Send Messages
+### 2. 发送消息
 
 ```java
 @Service
 public class OrderService {
 
     @Autowired
-    private ActorRef<OrderActor> orderActor;
+    @Qualifier("order-processor")
+    private ActorRef orderProcessor;
 
-    public void createOrder(String orderId) {
-        orderActor.tell(new CreateOrderCommand(orderId));
+    public void createOrder(CreateOrderMsg msg) {
+        // 异步发送
+        orderProcessor.tell(msg);
     }
 
-    public String getStatus() {
-        return orderActor.ask(new QueryStatusQuery(), Duration.ofSeconds(5));
+    public Order getOrder(UUID orderId) {
+        // 同步等待回复（超时 5 秒）
+        CompletableFuture<OrderResult> future =
+            orderProcessor.ask(new QueryOrderMsg(orderId), Duration.ofSeconds(5));
+        return future.get();
     }
 }
 ```
 
-## Architecture
+### 3. 配置 application.yml
+
+```yaml
+aether:
+  virtual-threads:
+    enabled: true
+    pinning-monitoring: true
+  actor:
+    default-mailbox-capacity: 1000
+  supervision:
+    default-strategy: one-for-one
+    max-restarts: 10
+  metrics:
+    enabled: true
+```
+
+## 🏗️ 架构
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -99,7 +134,7 @@ public class OrderService {
 │                    aether-core                          │
 │  ┌─────────────┐  ┌─────────────┐  ┌────────────────┐  │
 │  │   Actor     │  │  Supervisor │  │    Mailbox     │  │
-│  │  (Virtual   │  │   (Super-   │  │  (Bounded      │  │
+│  │  (Virtual   │  │   (Super-   │  │  (Blocking     │  │
 │  │   Thread)   │  │   vision    │  │   Queue)       │  │
 │  └─────────────┘  │   Tree)     │  └────────────────┘  │
 │                   └─────────────┘                       │
@@ -110,49 +145,154 @@ public class OrderService {
 └─────────────────────────────────────────────────────────┘
 ```
 
-### SPI Interfaces
+## 📊 监控指标
 
-| Interface | Description |
-|-----------|-------------|
-| `ActorFactory` | 创建 Actor 实例的工厂 |
-| `MailboxFactory` | 创建和管理邮箱实例 |
-| `SupervisorStrategy` | 自定义监督策略 |
-| `ActorMetricsReporter` | 自定义指标上报 |
-| `ThreadFactoryProvider` | 提供虚拟线程工厂 |
+### Actor 级别指标
 
-## Configuration
+| Metric Name | Type | Tags | Description |
+|-------------|------|------|-------------|
+| `aether.actor.messages.received` | Counter | `actor`, `message_type` | 接收消息总数 |
+| `aether.actor.messages.processed` | Counter | `actor`, `message_type` | 成功处理消息数 |
+| `aether.actor.messages.failed` | Counter | `actor`, `message_type`, `exception` | 处理失败消息数 |
+| `aether.actor.mailbox.size` | Gauge | `actor` | 当前邮箱积压量 |
+| `aether.actor.processing.time` | Timer | `actor`, `message_type` | 消息处理耗时 |
+| `aether.actor.state` | Gauge | `actor`, `state` | Actor 当前状态 |
+
+### 系统级别指标
+
+| Metric Name | Type | Description |
+|-------------|------|-------------|
+| `aether.system.actors.total` | Gauge | 总 Actor 数 |
+| `aether.system.actors.active` | Gauge | 活跃 Actor 数 |
+| `aether.system.virtual_threads.pinned` | Gauge | 被 pinned 的虚拟线程数（Java 24） |
+| `aether.system.throughput` | Gauge | 全局消息吞吐量（msg/s） |
+
+### Prometheus 输出示例
+
+```
+# HELP aether_actor_mailbox_size Current mailbox size
+# TYPE aether_actor_mailbox_size gauge
+aether_actor_mailbox_size{actor="order-processor"} 42
+
+# HELP aether_actor_messages_processed_total Total messages processed
+# TYPE aether_actor_messages_processed_total counter
+aether_actor_messages_processed_total{actor="order-processor",message_type="CreateOrderMsg"} 1024
+```
+
+## 🔧 配置详解
+
+### 完整配置示例
 
 ```yaml
 aether:
   virtual-threads:
     enabled: true                    # 启用虚拟线程（默认 true）
+    pinning-monitoring: true         # 检测虚拟线程 pinned 到平台线程（Java 24）
   actor:
-    default-mailbox-capacity: 10000  # 默认邮箱容量
+    default-mailbox-capacity: 1000 # 默认邮箱容量
+    default-delivery-semantics: at-most-once  # 默认投递语义
   supervision:
-    default-strategy: OneForOne      # 默认监督策略
+    default-strategy: one-for-one   # 默认监督策略
+    max-restarts: 10                # 最大重启次数
+    restart-window: 10s             # 重启窗口时间
   metrics:
-    enabled: true                    # 启用指标收集
+    enabled: true                   # 启用指标收集
+    export:
+      prometheus:
+        enabled: true
+        path: /actuator/prometheus
 ```
 
-## Monitoring Metrics
+## 🌲 监督策略
 
-| Metric Name | Type | Description |
-|-------------|------|-------------|
-| `aether.actor.messages.sent` | Counter | Actor 发送消息总数 |
-| `aether.actor.messages.received` | Counter | Actor 接收消息总数 |
-| `aether.actor.messages.processed` | Counter | Actor 成功处理消息数 |
-| `aether.actor.messages.failed` | Counter | 消息处理失败数 |
-| `aether.actor.mailbox.size` | Gauge | 当前邮箱队列长度 |
-| `aether.actor.active.count` | Gauge | 活跃 Actor 数量 |
-| `aether.system.actors.total` | Gauge | 系统中 Actor 总数 |
-| `aether.supervisor.restarts` | Counter | 监督器触发重启次数 |
+```java
+@ActorBean
+public class OrderSupervisor extends SupervisorActor {
 
-## Roadmap
+    @Override
+    protected SupervisorStrategy createStrategy() {
+        return SupervisorStrategy.builder()
+            .strategyType(SupervisorStrategy.Type.ONE_FOR_ONE)
+            .maxRestarts(10)
+            .withinDuration(Duration.ofSeconds(10))
+            .backoff(Duration.ofMillis(100))
+            .build();
+    }
 
-- **MVP (v1.0)**: Core + Spring Boot + Monitoring
-- **v1.1**: 监督树指标、有界邮箱、Actor 热重载
-- **v2.0**: 分布式 Actor、Saga 事务模式、Redis 服务发现
+    @Override
+    protected void initChildren() {
+        supervise(OrderProcessor.class, "order-processor");
+        supervise(PaymentActor.class, "payment-actor");
+        supervise(InventoryActor.class, "inventory-actor");
+    }
+}
+```
 
-## License
+## 📚 示例项目
 
-MIT License
+查看 [aether-examples](aether-examples/) 目录获取完整示例：
+
+- **Order Service** — 订单处理服务，演示 Actor 定义、消息传递、监督树
+
+## 🛠️ 构建
+
+```bash
+# 克隆仓库
+git clone https://github.com/1lovevv/aether.git
+cd aether
+
+# 构建
+mvn clean install
+
+# 运行测试
+mvn test
+
+# 构建并发布到 Maven Central（需要配置）
+mvn clean deploy -P release
+```
+
+## 📖 文档
+
+- [设计文档](docs/superpowers/specs/2026-06-05-aether-design.md)
+- [实现计划](docs/superpowers/plans/2026-06-05-aether-implementation.md)
+- [贡献指南](CONTRIBUTING.md)
+
+## 🗺️ 路线图
+
+### v1.0（已完成）
+- [x] 核心 Actor 模型（生命周期、邮箱、消息传递）
+- [x] 分层监督树 + 可插拔策略
+- [x] Spring Boot Starter（自动配置、注解支持）
+- [x] Micrometer 集成（Actor + 系统级别指标）
+- [x] SPI 接口预留（ActorFactory、ThreadScheduler、ActorRegistry）
+
+### v1.1（计划中）
+- [ ] 监督树级别监控指标
+- [ ] 有界邮箱与背压策略
+- [ ] Actor 热升级（不停机替换行为）
+- [ ] Java 24 虚拟线程特性全面支持
+
+### v2.0（未来愿景）
+- [ ] 透明分布式（Actor 远程调用、位置透明）
+- [ ] 基于 gRPC 的 Actor 迁移与序列化
+- [ ] Saga 模式长事务协调
+- [ ] Redis 注册中心支持（分布式 Actor 发现）
+- [ ] 集群分片与负载均衡
+
+## 🤝 贡献
+
+欢迎贡献！请查看 [CONTRIBUTING.md](CONTRIBUTING.md) 了解详情。
+
+## 📄 许可证
+
+[MIT License](LICENSE)
+
+## 🙏 致谢
+
+- 灵感来自 [Akka](https://akka.io/) 和 [Erlang/OTP](https://www.erlang.org/)
+- 基于 Java 21 [虚拟线程](https://openjdk.org/jeps/444) 构建
+- Spring Boot 集成参考了 [Spring Boot Starter](https://docs.spring.io/spring-boot/docs/current/reference/htmlsingle/#using.build-systems.starters)
+
+---
+
+> **Aether** — 以太，古希腊人假想的传播媒介。正如以太承载光波，Aether 框架承载消息传递，让并发编程变得简单、直观、高效。
