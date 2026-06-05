@@ -55,6 +55,66 @@ dependencies {
 }
 ```
 
+## 🆚 Aether vs Akka
+
+### 为什么选择 Aether？
+
+| 特性 | Aether | Akka |
+|------|--------|------|
+| **并发模型** | 虚拟线程（Project Loom） | 传统线程池 |
+| **代码风格** | 同步、阻塞 | 异步、回调 |
+| **Spring Boot** | 原生集成 | 需适配 |
+| **学习曲线** | 低 | 高 |
+| **内存/Actor** | ~1-2KB | ~300B + 线程池 |
+| **Actor 数量** | 百万级 | 千级 |
+| **许可证** | MIT（完全免费） | BSL（商业需付费） |
+
+### 虚拟线程 vs 传统线程
+
+**Aether — 虚拟线程（推荐）**：
+
+```java
+@ActorBean
+public class OrderProcessor {
+    @OnMessage
+    public void onCreateOrder(CreateOrderMsg msg) {
+        // ✅ 同步代码，性能无损！
+        Order order = database.save(msg.toOrder());  // 阻塞OK！
+        Thread.sleep(1000);                            // 阻塞OK！
+        httpClient.post(order);                         // 阻塞OK！
+    }
+}
+```
+
+**Akka — 传统线程池**：
+
+```java
+// ❌ 必须使用异步模式
+public class OrderActor extends AbstractActor {
+    @Override
+    public Receive createReceive() {
+        return receiveBuilder()
+            .match(CreateOrderMsg.class, msg -> {
+                // 回调地狱
+                database.saveAsync(msg.toOrder())
+                    .thenCompose(order -> httpClient.postAsync(order))
+                    .thenAccept(result -> sender().tell(result, self()));
+            })
+            .build();
+    }
+}
+```
+
+### 关键优势
+
+1. **🚀 虚拟线程原生** — 阻塞代码性能无损，告别回调地狱
+2. **🌲 简单监督** — 注解式配置，无需复杂层级
+3. **📊 Spring Boot 优先** — 零配置自动发现
+4. **📦 轻量级** — 200KB vs 5MB+
+5. **💰 MIT 许可证** — 完全免费，商业友好
+
+> **完整对比**：查看 [AETHER_VS_AKKA.md](AETHER_VS_AKKA.md)
+
 ## 🚀 快速开始
 
 ### 1. 定义 Actor
