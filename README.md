@@ -1,3 +1,5 @@
+**中文** | [English](README_EN.md)
+
 # Aether（以太）
 
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.1lovevv/aether-spring-boot-starter.svg)](https://search.maven.org/search?q=g:io.github.1lovevv)
