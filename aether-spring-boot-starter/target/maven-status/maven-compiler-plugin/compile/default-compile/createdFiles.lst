@@ -10,6 +10,7 @@ com\aether\spring\SpringActorRegistry.class
 com\aether\spring\metrics\AetherMetrics.class
 com\aether\spring\annotation\OnMessage.class
 com\aether\spring\metrics\ActorMetrics.class
+com\aether\spring\metrics\PerformanceMetrics.class
 com\aether\spring\AetherProperties$VirtualThreads.class
 com\aether\spring\AetherProperties.class
 com\aether\spring\annotation\OnFailure.class

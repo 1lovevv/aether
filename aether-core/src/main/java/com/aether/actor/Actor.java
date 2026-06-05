@@ -4,9 +4,12 @@ import com.aether.mailbox.Mailbox;
 import com.aether.message.Message;
 import com.aether.spi.ActorRef;
 import com.aether.spi.ThreadScheduler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -14,6 +17,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * Implements both ActorRef (for messaging) and Runnable (for scheduling).
  */
 public class Actor implements ActorRef, Runnable {
+
+    private static final Logger logger = LoggerFactory.getLogger(Actor.class);
 
     private final String path;
     private final Mailbox mailbox;
@@ -24,6 +29,7 @@ public class Actor implements ActorRef, Runnable {
     private volatile ActorRef currentSender;
 
     public Actor(String path, Mailbox mailbox, ThreadScheduler scheduler) {
+        ActorPathValidator.validate(path);
         this.path = path;
         this.mailbox = mailbox;
         this.scheduler = scheduler;
@@ -42,8 +48,10 @@ public class Actor implements ActorRef, Runnable {
         try {
             state.set(ActorState.RUNNING);
             scheduler.schedule(this);
+            logger.info("Actor started: {}", path);
         } catch (Exception e) {
             state.set(ActorState.FAILED);
+            logger.error("Failed to start actor: {}", path, e);
             throw new RuntimeException("Failed to start actor: " + path, e);
         }
     }
@@ -61,8 +69,7 @@ public class Actor implements ActorRef, Runnable {
                 break;
             } catch (Exception e) {
                 // Log and continue processing; individual message failures should not stop the actor
-                // In a full implementation, this would use a proper logging framework
-                System.err.println("Error processing message in actor " + path + ": " + e.getMessage());
+                logger.error("Error processing message in actor {}: {}", path, e.getMessage(), e);
             }
         }
 
@@ -127,9 +134,43 @@ public class Actor implements ActorRef, Runnable {
     @Override
     public <T extends Message> CompletableFuture<T> ask(Message message, Duration timeout) {
         CompletableFuture<T> future = new CompletableFuture<>();
-        // MVP: simplified implementation - just tell and return a future
-        // In a full implementation, this would set up a temporary response handler
-        tell(message);
+
+        // Create a temporary reply actor to receive the response
+        String replyPath = this.path + "/reply-" + System.nanoTime();
+        Mailbox replyMailbox = new Mailbox(1); // Reply mailbox only needs capacity 1
+        ReplyActor replyActor = new ReplyActor(replyPath, replyMailbox, scheduler, future);
+
+        // Set up timeout if specified
+        if (timeout != null && !timeout.isNegative() && !timeout.isZero()) {
+            future.orTimeout(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)
+                  .exceptionally(ex -> {
+                      if (ex instanceof java.util.concurrent.TimeoutException) {
+                          throw new java.util.concurrent.CompletionException(
+                              new TimeoutException("Ask timed out after " + timeout + " to actor: " + path));
+                      }
+                      throw new java.util.concurrent.CompletionException(ex);
+                  });
+        }
+
+        // Start the reply actor
+        replyActor.start();
+
+        // Send the message
+        // In a full implementation, we would set the reply actor as the sender
+        // so the receiving actor knows where to send the reply.
+        // For MVP, we just send the message and the reply actor will receive
+        // any message sent back to its path.
+        try {
+            tell(message);
+        } catch (Exception e) {
+            future.completeExceptionally(e);
+        }
+
+        // Clean up the reply actor when the future completes
+        future.whenComplete((result, ex) -> {
+            replyActor.stop();
+        });
+
         return future;
     }
 

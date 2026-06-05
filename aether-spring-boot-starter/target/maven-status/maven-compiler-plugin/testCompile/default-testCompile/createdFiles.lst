@@ -1,0 +1,11 @@
+com\aether\spring\ActorMessagePassingIntegrationTest.class
+com\aether\spring\SupervisorTreeIntegrationTest$TestChildActor.class
+com\aether\spring\ActorMessagePassingIntegrationTest$TestActor.class
+com\aether\spring\AetherAutoConfigurationIntegrationTest.class
+com\aether\spring\MetricsIntegrationTest.class
+com\aether\spring\SupervisorTreeIntegrationTest.class
+com\aether\spring\SupervisorTreeIntegrationTest$TestSupervisor.class
+com\aether\spring\ActorMessagePassingIntegrationTest$TestMessage.class
+com\aether\spring\metrics\PerformanceMetricsTest.class
+com\aether\spring\ActorMessagePassingIntegrationTest$ReplyActor.class
+com\aether\spring\TestApplication.class
